@@ -22,12 +22,25 @@ pub struct PreparedImage {
     pub bytes: Vec<u8>,
     /// BLAKE3 of the original bytes: identifies the exact build.
     pub original_hash: blake3::Hash,
+    // Keep the optional FPS image separate from the normal cache entry.
+    fps60: bool,
 }
 
 impl PreparedImage {
-    /// File name for the patched copy, unique per original build.
+    /// File name for the patched copy, unique per original build and FPS mode.
     pub fn file_name(&self) -> String {
-        format!("victory-image-{}.dll", &self.original_hash.to_hex()[..16])
+        let suffix = if self.fps60 { "-60fps" } else { "" };
+        format!("victory-image-{}{suffix}.dll", &self.original_hash.to_hex()[..16])
+    }
+
+    /// Set the title's own FPS target on the prepared copy only. Refuse an
+    /// unknown build or mismatched signature instead of guessing offsets.
+    pub fn enable_60fps(&mut self) -> Result<(), PrepareError> {
+        if !self.fps60 {
+            crate::fps60::apply(&mut self.bytes, &self.info, &self.original_hash)?;
+            self.fps60 = true;
+        }
+        Ok(())
     }
 }
 
@@ -110,6 +123,7 @@ pub fn prepare(original: &[u8]) -> Result<PreparedImage, PrepareError> {
         info,
         bytes,
         original_hash: blake3::hash(original),
+        fps60: false,
     })
 }
 
@@ -271,6 +285,17 @@ mod tests {
             assigned, 0,
             "the process executable already owns TLS slot zero"
         );
+    }
+
+    #[test]
+    fn sixty_fps_refuses_an_unrelated_build() {
+        let original = std::fs::read(std::env::current_exe().unwrap()).unwrap();
+        let mut prepared = prepare(&original).unwrap();
+        let before = prepared.bytes.clone();
+        let name = prepared.file_name();
+        assert!(prepared.enable_60fps().is_err());
+        assert_eq!(prepared.bytes, before);
+        assert_eq!(prepared.file_name(), name);
     }
 
     #[test]

@@ -14,6 +14,7 @@ param(
   [string]$Dlss = '',                           # NVIDIA's nvngx_dlss.dll (DLSS SDK)
   [string]$DataDir = '',                        # optional save folder (default: %LOCALAPPDATA%\victory\data)
   [switch]$RayTracing,                          # the title's ray tracing: fixes magenta reflections, ~30% slower
+  [Alias('60fps')][switch]$Fps60,              # experimental title-side 60 FPS target
   [switch]$WarmShaders,                          # precompile previously used pipelines before play
   [ValidateRange(1,32)][int]$WarmJobs = 2,
   [switch]$Log                                  # write a full log to target\release\last-run.log
@@ -115,9 +116,11 @@ if ($Log) { $env:VICTORY_LOG = 'info' } elseif (-not $env:VICTORY_LOG) { $env:VI
 $Game = (Resolve-Path -LiteralPath $Game).Path
 # The runtime logs to stderr; Windows PowerShell would stop on it under 'Stop'.
 $ErrorActionPreference = 'Continue'
+$fpsArgs = @()
+if ($Fps60) { $fpsArgs += '--60fps' }
 if ($Log) {
-  & $exe run $Game --console series-s --execute *> (Join-Path $PSScriptRoot 'target\release\last-run.log')
+  & $exe run $Game --console series-s --execute @fpsArgs *> (Join-Path $PSScriptRoot 'target\release\last-run.log')
 } else {
-  & $exe run $Game --console series-s --execute
+  & $exe run $Game --console series-s --execute @fpsArgs
 }
 exit $LASTEXITCODE

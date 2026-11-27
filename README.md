@@ -1,10 +1,12 @@
 # NVIDIA For for CGBJ: RTX-VI
 
-> **Test system (user-reported):** NVIDIA GeForce RTX 5070 Ti · 96 GB DDR5 · AMD Ryzen 9 9900X3D. **RUNNING IN 22-30 FPS, 2 HOURS OF GAMEPLAY WITHOUT CRASHES**
+> **Test system (user-reported):** NVIDIA GeForce RTX 5070 Ti · 96 GB DDR5 · AMD Ryzen 9 9900X3D.
 >
 > **Black sun: fixed and confirmed in-game.**
 >
 > **NVIDIA RT hardware acceleration:** native RT-core support is the target of the experimental V4 renderer, with the goal of significantly improving rendering performance. Native DXR traversal is not yet implemented; its performance gains have not been verified.
+>
+> **V5 — 60 FPS proof of concept:** the experimental patch raises the game's target frame rate from 30 to 60 FPS. Current user-reported results on the test system are **25–45 FPS in gameplay and 60 FPS in the main menu**. Stable 60 FPS in gameplay requires further optimization.
 >
 > **AMD boys go home, it's not for you.**
 
@@ -21,7 +23,7 @@
 4. Set the path to your own game dump (the folder must contain `game_scarlett_master.exe`):
 
    ```powershell
-   $env:VICTORY_GAME_DIR = "C:\Great_Steal_Vehicle_7"
+   $env:VICTORY_GAME_DIR = "C:\GTA6_Xbox"
    ```
 
 5. Launch the experimental V4 original-lighting renderer:
@@ -40,6 +42,67 @@
    ```
 
    If blocky ambient lighting persists, try `$env:VICTORY_AMBIENT = "0"` before launching the balanced renderer. This may make shadows darker.
+
+### Experimental 60 FPS mode (proof of concept)
+
+The V5 patch raises the game's internal frame-rate target from 30 to 60 FPS.
+**This is a proof of concept, not a guarantee of 60 FPS.** It is not frame
+generation and does not make the renderer itself faster.
+
+Current user-reported performance on the RTX 5070 Ti test system:
+
+| Scenario | Observed FPS |
+|---|---:|
+| Gameplay | 25–45 FPS |
+| Main menu | 60 FPS |
+
+More CPU and GPU optimizations are required to achieve a stable 60 FPS in
+gameplay. Actual performance depends on the scene and rendering settings;
+the original-lighting path can be substantially slower.
+
+#### Run with the 60 FPS patch
+
+Build the updated runtime and set your game directory as described above.
+For the faster balanced renderer:
+
+```powershell
+.\Play-VIctory.cmd pareto-residency -60fps
+```
+
+For the experimental original-lighting V4 renderer:
+
+```powershell
+.\Play-RT-V4.cmd -60fps
+```
+
+#### Run without the 60 FPS patch (default 30 FPS target)
+
+For the faster balanced renderer:
+
+```powershell
+.\Play-VIctory.cmd pareto-residency
+```
+
+For the experimental original-lighting V4 renderer:
+
+```powershell
+.\Play-RT-V4.cmd
+```
+
+Simply omit `-60fps` to restore the normal frame-rate target. For DLSS, add
+`-Fps60` to the existing `Play-DLSS.ps1` command to enable the patch, or omit
+it to disable the patch. The runtime also accepts
+`victory run <exe> --console series-s --execute --60fps`.
+
+The patch changes both verified title-side target-rate loads to 60 FPS,
+retaining the engine's own period calculation and refresh-divisor selection.
+It checks the full executable BLAKE3 and both instruction signatures before
+changing a separate cached copy; the original executable is never edited.
+An unsupported build fails explicitly.
+
+**Known limitations:** this is not a native DXR implementation. Simulation,
+physics, animation, audio sync and cutscenes at 60 FPS still require in-game
+validation. See [FPS60.md](FPS60.md) for validation and troubleshooting.
 
 Keep the shader cache between launches to avoid unnecessary recompilation. The first run may stutter while shaders are compiled.
 

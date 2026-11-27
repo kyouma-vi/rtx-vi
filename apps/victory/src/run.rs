@@ -42,6 +42,7 @@ pub fn run(
     strict: bool,
     execute: bool,
     console: Console,
+    fps60: bool,
 ) -> Result<()> {
     use std::sync::Arc;
     use victory_hle::{HleResolver, HostPolicy};
@@ -54,7 +55,11 @@ pub fn run(
     victory_hle::modules::lifecycle::wait_for_previous();
     let cfg = victory_core::Config::load()?;
     let original = std::fs::read(exe).with_context(|| format!("reading {}", exe.display()))?;
-    let prepared = victory_loader::prepare(&original)?;
+    let mut prepared = victory_loader::prepare(&original)?;
+    if fps60 {
+        prepared.enable_60fps()?;
+        println!("60 FPS patch   applied (2 sites; experimental; target 60 FPS)");
+    }
     let hash = prepared.original_hash.to_hex();
     match victory_game::identify(&hash) {
         Some(build) => println!("build          {} ({hash})", build.label),
@@ -529,6 +534,6 @@ mod cpu_check_tests {
 }
 
 #[cfg(not(windows))]
-pub fn run(_: &Path, _: Unimplemented, _: bool, _: bool, _: Console) -> Result<()> {
+pub fn run(_: &Path, _: Unimplemented, _: bool, _: bool, _: Console, _: bool) -> Result<()> {
     anyhow::bail!("running titles requires Windows")
 }

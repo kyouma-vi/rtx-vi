@@ -142,6 +142,9 @@ enum Command {
         /// The console model the title sees (device type, memory).
         #[arg(long, value_enum, default_value_t = Console::SeriesX)]
         console: Console,
+        /// Experimental 60 FPS target for the verified executable build (-60fps also accepted).
+        #[arg(long = "60fps")]
+        fps60: bool,
         /// Arguments for the title, after `--` (it reads the whole command
         /// line; a title that relaunches itself passes some).
         #[arg(last = true)]
@@ -167,6 +170,21 @@ enum Console {
     SeriesS,
 }
 
+/// Accept the requested single-dash spelling without changing title arguments.
+fn normalize_run_args(mut args: Vec<std::ffi::OsString>) -> Vec<std::ffi::OsString> {
+    if args.get(1).is_some_and(|a| a == "run") {
+        for arg in args.iter_mut().skip(2) {
+            if arg.as_os_str() == "--" {
+                break;
+            }
+            if arg.as_os_str() == "-60fps" {
+                *arg = "--60fps".into();
+            }
+        }
+    }
+    args
+}
+
 fn main() -> Result<()> {
     victory_core::logging::init("info");
     // The audio recorder `run` starts for `VICTORY_AUDIO_CAPTURE`.
@@ -174,7 +192,7 @@ fn main() -> Result<()> {
     if victory_hle::modules::audio::capture::child() {
         return Ok(());
     }
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(normalize_run_args(std::env::args_os().collect()));
     match cli.command {
         Command::Inspect {
             file,
@@ -222,10 +240,11 @@ fn main() -> Result<()> {
             strict,
             execute,
             console,
+            fps60,
             title_args,
         } => {
             victory_hle::runtime::set_title_args(title_args);
-            run::run(&exe, unimplemented, strict, execute, console)
+            run::run(&exe, unimplemented, strict, execute, console, fps60)
         }
         #[cfg(all(windows, feature = "diagnostics"))]
         Command::Replay(options) => replay::run(options),
@@ -277,4 +296,29 @@ pub(crate) fn default_paths(paths: Vec<PathBuf>) -> Result<Vec<PathBuf>> {
         "no paths given and none configured (see victory.example.toml)"
     );
     Ok(all)
+}
+
+#[cfg(test)]
+mod fps_cli_tests {
+    use super::*;
+
+    #[test]
+    fn fps_is_opt_in_and_title_arguments_are_untouched() {
+        for (args, expected) in [
+            (vec!["victory", "run", "title.exe"], false),
+            (vec!["victory", "run", "title.exe", "-60fps"], true),
+            (vec!["victory", "run", "title.exe", "--60fps"], true),
+            (vec!["victory", "run", "title.exe", "--", "-60fps"], false),
+        ] {
+            let title_flag = args.contains(&"--");
+            let cli = Cli::try_parse_from(normalize_run_args(args.into_iter().map(Into::into).collect())).unwrap();
+            let Command::Run { fps60, title_args, .. } = cli.command else { panic!("not run") };
+            assert_eq!(fps60, expected);
+            if title_flag {
+                assert_eq!(title_args, vec!["-60fps".to_owned()]);
+            } else {
+                assert!(title_args.is_empty());
+            }
+        }
+    }
 }
